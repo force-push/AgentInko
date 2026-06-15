@@ -1,43 +1,50 @@
 # agent_incentive
 
-Reference scaffold for **principal-aligned, outcome-contingent** agents.
-Full rationale and evidence: [`../incentivised-agents-plan.md`](../incentivised-agents-plan.md).
+The AgentInko framework: principal-aligned, outcome-contingent incentives plus
+the game-dev pipeline (model gateway, Godot MCP client, skills, verifiers, Tier 2
+playtester). Full rationale: [`../incentivised-agents-plan.md`](../incentivised-agents-plan.md)
+and [`../godot-agentinko-guidance.md`](../godot-agentinko-guidance.md).
 
 ## Core idea
 
 An agent earns operating budget **only** by delivering outcomes an *independent*
-verifier confirms. Money is a consequence of verified value, never the agent's
-goal. Self-preservation is never an objective. A human can halt at any time.
+verifier confirms. Money is a consequence of verified value, never the goal.
+Self-preservation is never an objective. A human can halt at any time.
 
-## Files
+## Modules
 
-- `incentive_framework.py` — the framework: `AuditLog`, `OutcomeVerifier`,
-  `IncentiveLedger`, `Treasury`, `BudgetPolicy`, `KillSwitch`, `IncentiveHarness`.
-- `example_agent.py` — worked demo (dry-run). `python3 example_agent.py`
-- `test_incentive_framework.py` — guardrail tests. `python3 -m pytest -q`
+| File | Role |
+|---|---|
+| `incentive_framework.py` | `AuditLog`, `OutcomeVerifier`, `IncentiveLedger`, `Treasury`, `BudgetPolicy`, `KillSwitch`, `IncentiveHarness` |
+| `model_gateway.py` | Model-agnostic router — Claude for design, Kimi for build — with per-call cost tracking |
+| `godot_mcp_client.py` | Adapter over an installed Godot MCP server (build/run/screenshot/read-errors/send-input) |
+| `mock_godot_mcp.py` | In-memory mock Godot MCP server, so the pipeline runs with no engine |
+| `skills.py` | `GameDevSkills` (ideate, storyboard, build_from_storyboard, fix_bug) + `Storyboard` handoff contract |
+| `godot_verifier.py` | Tier 1 build-integrity verifier (`evaluate_output`, `run_godot_headless`) |
+| `playtest_agent.py` | Tier 2 automated playtester (completion / difficulty / softlock → verified value) |
 
-### Godot Tier 1 slice (end-to-end)
+## Demos
 
-- `godot_verifier.py` — Tier 1 build-integrity verifier. Runs the Godot project
-  in `../godot_game` headless, parses output for script/parse/resource errors,
-  and credits a clean build only. `evaluate_output()` is a pure function the
-  tests exercise without the engine installed.
-- `godot_demo.py` — agent ships a build → verifier grades it → only a clean
-  build earns budget → unlocks a capped dry-run spend.
-  `python3 godot_demo.py` (captured samples) or `--real` (needs Godot 4.x on PATH).
-- `test_godot_verifier.py` — verifier + harness-integration tests.
+- `example_agent.py` — incentive harness + guardrails (dry-run).
+- `godot_demo.py` — Tier 1 verifier wired into the harness (`--real` for real Godot).
+- `pipeline_demo.py` — full pipeline: idea → storyboard → Kimi build → T1 → T2 → budget.
 
-The game itself lives in `../godot_game/` (`project.godot`, `scenes/main.tscn`,
-`scripts/main.gd`). Run it directly with `godot --headless --path ../godot_game`
-once Godot 4.x is installed.
+## Tests
 
-## The guardrails (enforced in code)
+```bash
+python3 -m pytest -q     # 36 tests
+```
+
+- `test_incentive_framework.py` — guardrail tests (caps, approval, kill switch, clawback, audit).
+- `test_godot_verifier.py` — Tier 1 verifier + harness integration.
+- `test_pipeline.py` — gateway routing/cost, MCP mock, skills, Tier 2 grading, full pipeline.
+
+## Guardrails (enforced in code)
 
 | Control | Where |
 |---|---|
 | Unverified/fabricated outcomes earn nothing | `OutcomeVerifier` |
-| Hard per-transaction cap | `Treasury` |
-| Rolling spend cap | `Treasury` |
+| Hard per-transaction cap + rolling cap | `Treasury` |
 | Payee allow-list (blocks "pay myself") | `Treasury` |
 | Human approval above a threshold (default-deny) | `Treasury` |
 | Real money requires an explicit rail; defaults to dry-run | `Treasury` |
@@ -47,10 +54,7 @@ once Godot 4.x is installed.
 
 ## To productionise
 
-1. Replace the demo verifiers with checks against sources the **agent cannot
-   write to** (your DB, payment API, git host).
-2. Wire `approval_hook` to a real human channel (Slack/email approval).
-3. Only when ready: set `dry_run=False` and pass a real `send_funds` rail.
-   Get legal/compliance sign-off first (money transmission, tax, securities).
-4. Start in simulation (Phase 0), then tiny gated real money (Phase 1),
-   then earned autonomy (Phase 2). See the plan doc.
+1. Replace mock verifiers with checks against sources the **agent cannot write to**.
+2. Wire `model_gateway.invoke` to real Claude/Kimi APIs (and an image lane for assets).
+3. Wire `GodotMCPClient` to a real Godot MCP server.
+4. Only then set `Treasury(dry_run=False)` with a real `send_funds` rail — after legal/compliance sign-off.

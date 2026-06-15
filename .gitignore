@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .godot/
+.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/

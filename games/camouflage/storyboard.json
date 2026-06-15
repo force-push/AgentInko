@@ -1,0 +1,93 @@
+{
+  "title": "Camouflage",
+  "genre": "reflex color-match arcade",
+  "engine": "godot-4.x",
+  "scope": "very-small-single-mechanic",
+  "goal": "Cross open water by matching your skin to the seabed band you're over, staying camouflaged through hunter scans until you reach the reef.",
+  "mechanics": [
+    "color_swap: set octopus skin to a palette color via number keys",
+    "band_matching: octopus is camouflaged while its color equals the active band under it",
+    "scan_dodge: at each timed hunter scan, must be matched or get spotted",
+    "combo_scoring: continuous matching builds a score multiplier, resets on mismatch",
+    "pearl_collect: ink-pearls bank points only when collected while matched"
+  ],
+  "win_condition": "Reach the reef at the level's distance with at least 1 life remaining.",
+  "fail_condition": "Get spotted (color mismatched at a scan tick) enough times to lose all 3 lives.",
+  "entities": [
+    {"name": "Octopus", "role": "player", "behavior": "fixed screen x; player sets its color; camouflaged when color == active band"},
+    {"name": "Seabed", "role": "scrolling background", "behavior": "streams colored bands leftward at scroll_speed; band under octopus = active band"},
+    {"name": "ScanController", "role": "hazard", "behavior": "every scan_interval s, telegraph for `telegraph` s then scan; mismatch at scan tick => spotted"},
+    {"name": "InkPearl", "role": "collectible", "behavior": "floats within bands; +points when grabbed while matched"},
+    {"name": "Reef", "role": "goal", "behavior": "appears at distance D; touching it = level clear"}
+  ],
+  "controls": {
+    "set_color": ["1", "2", "3", "4", "5"],
+    "nudge": ["left", "right", "a", "d"],
+    "restart": "r"
+  },
+  "palette": ["coral", "teal", "magenta", "lime", "amber"],
+  "color_symbols": {"coral": "circle", "teal": "triangle", "magenta": "square", "lime": "diamond", "amber": "cross"},
+  "difficulty_principle": "change one knob per level (a new colour OR more speed OR tighter scans), never all at once; level 0 is an unfailable tutorial",
+  "levels": [
+    {"level": 0, "new_pressure": "tutorial: swap + scan", "palette_size": 2, "scroll_speed": 70,  "scan_interval": 3.0, "telegraph": 0.9, "distance_m": 15, "target_completion": 0.95, "unfailable": true},
+    {"level": 1, "new_pressure": "+1 colour",      "palette_size": 3, "scroll_speed": 70,  "scan_interval": 3.0, "telegraph": 0.9, "distance_m": 25, "target_completion": 0.88},
+    {"level": 2, "new_pressure": "faster scroll",  "palette_size": 3, "scroll_speed": 100, "scan_interval": 3.0, "telegraph": 0.9, "distance_m": 35, "target_completion": 0.80},
+    {"level": 3, "new_pressure": "tighter scans",  "palette_size": 3, "scroll_speed": 100, "scan_interval": 2.4, "telegraph": 0.7, "distance_m": 45, "target_completion": 0.70},
+    {"level": 4, "new_pressure": "+1 colour",      "palette_size": 4, "scroll_speed": 120, "scan_interval": 2.2, "telegraph": 0.6, "distance_m": 55, "target_completion": 0.60},
+    {"level": 5, "new_pressure": "full palette",   "palette_size": 5, "scroll_speed": 140, "scan_interval": 1.9, "telegraph": 0.5, "distance_m": 70, "target_completion": 0.50}
+  ],
+  "feasibility_rule": "scan_interval - telegraph >= 0.25 (human reaction floor); build agent must keep every level solvable",
+  "accessibility": {
+    "color_plus_symbol": "never rely on colour alone; each colour has a distinct symbol on bands, octopus, and keys",
+    "audio_telegraph": "a rising hum pitches up toward each scan so the cue is not sight- or colour-dependent"
+  },
+  "preview_lane": {"shows_next_bands": 3, "purpose": "anticipation over twitch; makes reaction windows feel fair"},
+  "feedback": {
+    "match": "pop + sparkle", "combo_up": "flare", "near_miss": "'close!' spark if matched within 0.15s of scan",
+    "spotted": "red vignette + brief slow-mo beat"
+  },
+  "fairness": {"lives": 3, "invuln_after_spotted_s": 1.0, "shield_pearl": "occasional pickup absorbs one mismatch"},
+  "onboarding": "level 0 is unfailable: 2 colours, slow scroll, huge telegraph; teaches swap then match-before-scan",
+  "scoring": {
+    "matched_per_second": 10,
+    "combo_tiers": [{"after_s": 0, "mult": 1}, {"after_s": 5, "mult": 2}, {"after_s": 10, "mult": 3}],
+    "pearl": "50 * combo (only if matched)",
+    "level_clear_bonus": "lives_remaining * 200"
+  },
+  "lives": 3,
+  "markers": {
+    "ready": "[INKO] game_ready",
+    "result": "[INKO] result completed=<bool> time=<float> deaths=<int>",
+    "done": "[INKO] playtest_done"
+  },
+  "verification": {
+    "tier1_build": ["loads with no script/parse errors", "headless run reaches reef and emits result+done markers"],
+    "tier2_playtest": {
+      "policies": {
+        "competent": "~250ms reaction model: swap to the upcoming band before the scan",
+        "random": "swap colors at random"
+      },
+      "healthy_criteria": [
+        "competent completion >= level target_completion",
+        "random completion well below target (skill must matter, not luck)",
+        "softlock_rate ~= 0 (scroll guarantees progress; a stall is a bug)",
+        "every level satisfies feasibility_rule"
+      ],
+      "maps_to_grader": "completion in 0.40-0.95 band, softlock_rate <= 0.05"
+    },
+    "tier3_fun": ["session length", "retry / one-more-go rate", "human tester rating — never an LLM judge"]
+  },
+  "art_direction": {
+    "background": "dark moonlit water",
+    "band_colors": "high-contrast coral/teal/magenta/lime/amber",
+    "octopus": "faint glow in its current color",
+    "scan": "edge sweep line + rising hum + brief desaturation flash at scan tick",
+    "hud": "distance bar, lives, combo, score — minimal"
+  },
+  "build_notes": [
+    "Single Main scene: Octopus, Seabed spawner, ScanController, PearlSpawner, HUD",
+    "Drive all difficulty from levels[] so the playtest agent can retune via data, not code",
+    "Emit the [INKO] markers so Tier 1/2 verification works out of the box",
+    "Ship level 1, verify, then add levels as data — no feature creep"
+  ]
+}
