@@ -20,7 +20,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=str(Path(__file__).parent.parent / ".env"))
 
-from real_invoke import make_invoke
+from real_invoke import make_invoke, design_models_override
 from model_gateway import ModelGateway, ModelSpec
 from godot_mcp_client import GodotMCPClient
 from mock_godot_mcp import MockGodotMCP
@@ -61,7 +61,7 @@ def main(use_real_godot: bool = False) -> None:
     # --- Live model backends ---
     print("[init] Loading real API backends (Claude + Kimi K2.6)...")
     invoke = make_invoke()
-    gateway = ModelGateway(invoke)
+    gateway = ModelGateway(invoke, models=design_models_override())
     print("       ✓ Claude Haiku + Kimi K2.6 ready")
 
     # --- Godot backend ---
