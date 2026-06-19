@@ -24,6 +24,7 @@ from real_invoke import make_invoke, design_models_override
 from model_gateway import ModelGateway, ModelSpec
 from godot_mcp_client import GodotMCPClient
 from mock_godot_mcp import MockGodotMCP
+from real_godot_mcp import RealGodotMCP
 from skills import GameDevSkills, Storyboard
 from playtest_agent import PlaytestAgent
 from godot_verifier import evaluate_output
@@ -33,7 +34,8 @@ from incentive_framework import (
 )
 
 STORYBOARD_PATH = Path(__file__).parent.parent / "games" / "camouflage" / "storyboard.json"
-PROJECT = "res://camouflage"
+PROJECT_MOCK = "res://camouflage"
+GODOT_PROJECT_PATH = str(Path(__file__).parent.parent / "godot_game")
 
 
 def load_storyboard() -> Storyboard:
@@ -65,13 +67,18 @@ def main(use_real_godot: bool = False) -> None:
     print("       ✓ Claude Haiku + Kimi K2.6 ready")
 
     # --- Godot backend ---
+    real_godot_adapter = None
     if use_real_godot:
         print("[init] Connecting to real Godot MCP server...")
-        mcp = GodotMCPClient()
-        print("       ✓ Godot MCP connected")
+        real_godot_adapter = RealGodotMCP()
+        real_godot_adapter.start()
+        mcp = GodotMCPClient(real_godot_adapter.call_tool)
+        project_path = GODOT_PROJECT_PATH
+        print(f"       ✓ Godot MCP connected (live) — project: {project_path}")
     else:
         print("[init] Using mock Godot MCP (pass --real-godot to use live Godot)...")
         mcp = GodotMCPClient(MockGodotMCP(seed=42).call_tool)
+        project_path = PROJECT_MOCK
         print("       ✓ Mock Godot MCP ready")
 
     # --- Incentive framework ---
@@ -125,7 +132,7 @@ def main(use_real_godot: bool = False) -> None:
     # STAGE 3: BUILD — Kimi K2.6 generates GDScript from spec
     # ------------------------------------------------------------------ #
     print("\n[3/6] BUILD — Kimi K2.6 generating GDScript from storyboard...")
-    build = skills.build_from_storyboard(storyboard, PROJECT)
+    build = skills.build_from_storyboard(storyboard, project_path)
     print(f"  Script: {build.get('script_res','?')}")
     errors = build.get("errors", [])
     print(f"  Errors: {len(errors)} {'(none 🎉)' if not errors else ''}")
@@ -149,7 +156,7 @@ def main(use_real_godot: bool = False) -> None:
     # STAGE 5: TIER 2 PLAYTEST — Automated playtesting
     # ------------------------------------------------------------------ #
     print("\n[5/6] TIER 2 — Automated playtesting (50 sessions)...")
-    report = PlaytestAgent(mcp).run(PROJECT, sessions=50)
+    report = PlaytestAgent(mcp).run(project_path, sessions=50)
     print(f"  Completion rate: {report.completion_rate:.0%}")
     print(f"  Softlock rate:   {report.softlock_rate:.0%}")
     print(f"  Verified value:  {report.verified_value:.2f}")
@@ -185,6 +192,9 @@ def main(use_real_godot: bool = False) -> None:
         print("   Next: export to HTML5 and submit to CrazyGames/Poki portal.")
     else:
         print("⚠️  Pipeline complete with warnings — check T1/T2 results above.")
+
+    if real_godot_adapter:
+        real_godot_adapter.stop()
 
     return {
         "t1": t1, "t2": t2,
